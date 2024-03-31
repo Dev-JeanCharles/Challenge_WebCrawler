@@ -9,70 +9,72 @@ import org.jsoup.select.Elements
 
 class Operation {
 
-    private static Document buscarPagina(String url) {
-        return (Document) HttpBuilder.configure {request.uri = url}.get()
+    private static Document buscarPagina(String url) throws IOException {
+        return (Document) HttpBuilder.configure { request.uri = url }.get()
     }
 
     static String PaginaTISS() {
+
         Document page = buscarPagina("https://www.gov.br/ans/pt-br")
         Element content = page.getElementById("ce89116a-3e62-47ac-9325-ebec8ea95473")
-        String url = content.getElementById("a").attr("href")
+        String url = content.getElementsByTag("a").attr("href")
 
         Document page2 = buscarPagina(url)
-        Element content2 = page2.getElementById("govbr-card-content")
-
+        Element content2 = page2.getElementsByClass("govbr-card-content").first()
         return content2.getElementsByTag("a").attr("href")
     }
 
     static void buscarTabela() {
+
         Document page = buscarPagina(PaginaTISS())
-        Element content = page.getElementsByClass("internal-link").get(0)
-        String url = content.getElementById("a").attr("href")
+        Element content = page.getElementsByClass("internal-link").first()
+        String url = content.attr("href")
 
         Document page2 = buscarPagina(url)
         Element table = page2.getElementsByTag("tbody").first().getElementsByTag("tr").last()
         url = table.lastElementChild().firstElementChild().attr("href")
 
-        baixarArquivo(url, "componente_de_comunicao_TISS.zip")
+        baixarArquivo(url, "Documento_do_TISS.zip")
 
     }
 
-    static void buscarHistorico() {
+    void buscarHistorico() {
         try {
-            Document page = Jsoup.connect(PaginaTISS() as String).get()
+            Document page = Jsoup.connect(PaginaTISS()).get()
             Element content = page.select(".external-link").get(0)
-            String url = page.select("a").attr("href")
+            String url = content.select("a").attr("href")
 
             Document page2 = Jsoup.connect(url).get()
             Elements content2 = page2.select("tbody")
             Elements listaTr = content2.select("tr")
 
-            List<List<String>> data = []
+            List<List<String>> informacoes = []
 
-            data.add(["Competência", "Publicação", "Início de Vigência"])
+            informacoes.add(["Competência", "Publicação", "Início de Vigência"])
 
-            listaTr.each {tr ->
+            listaTr.each { tr ->
                 Elements listaTd = tr.select("td")
                 String competencia = listaTd.get(0).text()
 
                 List<String> competenciaSplit = competencia.split("/")
-                Integer age = Integer.parseInt(competenciaSplit[1])
+                Integer ano = Integer.parseInt(competenciaSplit[1])
 
-                if (age >= 2016) {
+                if (ano >= 2016) {
                     String publicacao = listaTd.get(1).text()
-                    String inicioVigencia = listaTd.get(2)
-                    data.add([competencia, publicacao, inicioVigencia])
+                    String inicioVigencia = listaTd.get(2).text()
+                    informacoes.add([competencia, publicacao, inicioVigencia])
                 }
             }
 
-            criarArquivo(data, "./Downloads/historico_versoes_de_componentes_TISS.txt")
-
-        }catch (Exception e) {
-            println("Erro ao captar os dados" ${e.getMessage()})
+            criarArquivo(informacoes, "./Downloads/historico_versoes_TISS.txt")
+        } catch (Exception e) {
+            println("Erro ao coletar informações: ${e.getMessage()}")
         }
     }
 
-    void buscarTabelaErros() {
+
+    static void buscarTabelaErros() {
+
         try {
             Document page = Jsoup.connect(PaginaTISS()).get()
             Element content = page.select("#parent-fieldname-text > .callout").get(2)
@@ -82,30 +84,30 @@ class Operation {
             Element content2 = page2.select("#parent-fieldname-text").get(0)
             url = content2.select("a").attr("href")
 
-            baixarArquivo(url, "tabela_de_erros_no_envio_para_a_ANS.xlsx")
+            baixarArquivo(url, "tabela_de_erros_ANS.xlsx")
 
         }catch (Exception e) {
-            println("Erro ao captar os dados" ${ e.getMessage()})
+            println("Erro ao captar os dados: " + e.getMessage())
         }
     }
 
-    static void criarArquivo(List<List<String>> data, String path ) {
-        try {
-            File file = new File(path)
+     void criarArquivo(List<List<String>> data, String path ) {
 
-            if (file.exists()) {
-                file.delete()
-            }
-            file.createNewFile()
-            file.withWriter {writer ->
-                data.each {d ->
-                    writer.writeLine(d.join(", "))
-                }
-            }
-            println("O arquivo foi salvo no seguinte diretório: ${path}")
-        } catch (Exception e) {
-            println("Erro ao captar os dados" ${e.getMessage()})
-        }
+         try {
+             File file = new File(caminhoArquivo)
+             if (file.exists()) {
+                 file.delete()
+             }
+             file.createNewFile()
+             file.withWriter { writer ->
+                 data.each { info ->
+                     writer.writeLine(info.join(", "))
+                 }
+             }
+             println("Arquivo salvo em ${path}")
+         } catch (Exception e) {
+             println("Erro ao criar arquivo: ${e.getMessage()}")
+         }
     }
 
     private static void baixarArquivo(String url, String name) {
@@ -116,9 +118,7 @@ class Operation {
 
         HttpBuilder.configure {
             request.uri = url
-        }.get {
-            Download.toFile(delegate, path)
-        }
+        }.get { Download.toFile(delegate, path)}
     }
 }
 
